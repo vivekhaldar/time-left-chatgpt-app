@@ -9,14 +9,33 @@ A simple ChatGPT app that shows elegant progress bar visualizations of how much 
 - **Light/Dark Theme**: Automatically matches ChatGPT's theme
 - **Real-time Calculation**: Shows current elapsed/remaining percentages
 
-## Running Locally
+## Quick Start
 
 ```bash
-cd server
-uv run main.py
+# Install dependencies
+uv sync
+
+# Run the server
+uv run python server/main.py
 ```
 
 The server will start on `http://localhost:8000`.
+
+## Running Tests
+
+```bash
+# Install dev dependencies
+uv sync --all-extras
+
+# Run all tests
+uv run pytest
+
+# Run tests with verbose output
+uv run pytest -v
+
+# Run a specific test
+uv run pytest server/test_main.py::TestCalculateTimeRemaining::test_noon_day_progress_is_fifty -v
+```
 
 ## Testing with MCP Inspector
 
@@ -24,13 +43,57 @@ The server will start on `http://localhost:8000`.
 npx @modelcontextprotocol/inspector@latest http://localhost:8000/mcp
 ```
 
-## Testing in ChatGPT
+Note: MCP Inspector tests the protocol but doesn't render the widget UI. Use `web/preview.html` to preview the widget locally.
 
-1. Start the server locally
-2. Expose it with ngrok: `ngrok http 8000`
-3. In ChatGPT: Settings → Apps & Connectors → Advanced settings → Enable developer mode
-4. Create a connector with your ngrok URL
-5. Ask: "How much time is left?" or "What's my time progress?"
+## Testing in ChatGPT (with Cloudflare Tunnel)
+
+ChatGPT needs a public HTTPS URL to connect to your MCP server. Cloudflare Tunnel provides this for free without an account.
+
+### 1. Install Cloudflare Tunnel (one-time)
+
+```bash
+# macOS
+brew install cloudflared
+
+# Or download from https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/
+```
+
+### 2. Start the server and tunnel
+
+```bash
+# Terminal 1: Start the MCP server
+uv run python server/main.py
+
+# Terminal 2: Create a tunnel to localhost:8000
+cloudflared tunnel --url http://localhost:8000
+```
+
+Cloudflare will output a URL like:
+```
+Your quick Tunnel has been created! Visit it at:
+https://random-words-here.trycloudflare.com
+```
+
+### 3. Configure ChatGPT
+
+1. Go to ChatGPT: **Settings → Apps & Connectors → Advanced settings**
+2. Enable **Developer mode**
+3. Click **Create connector**
+4. Enter the Cloudflare URL with `/mcp` path: `https://random-words-here.trycloudflare.com/mcp`
+5. Save the connector
+
+### 4. Test it
+
+Ask ChatGPT: "How much time is left?" or "What's my time progress?"
+
+## Local Widget Preview
+
+To preview the widget without ChatGPT:
+
+1. Start the server: `uv run python server/main.py`
+2. Open `web/preview.html` in a browser
+
+This preview mocks the `window.openai` API that ChatGPT normally provides.
 
 ## Project Structure
 
@@ -38,8 +101,25 @@ npx @modelcontextprotocol/inspector@latest http://localhost:8000/mcp
 time-left-chatgpt-app/
 ├── server/
 │   ├── main.py           # MCP server with get_time_remaining tool
-│   └── requirements.txt
+│   ├── test_main.py      # Unit tests
+│   └── requirements.txt  # Legacy deps (use pyproject.toml instead)
 ├── web/
-│   └── widget.html       # Progress bar visualization widget
+│   ├── widget.html       # Progress bar visualization widget
+│   └── preview.html      # Local preview with mocked window.openai
+├── pyproject.toml        # Project config and dependencies
 └── README.md
 ```
+
+## Architecture
+
+```
+User Prompt → ChatGPT Model → MCP Tool Call → This Server → Response + Widget Metadata
+                                                              ↓
+                                           ChatGPT loads widget.html in iframe
+                                                              ↓
+                                           Widget reads from window.openai.toolOutput
+```
+
+Key data flow:
+- `structuredContent` in server response → `window.openai.toolOutput` in widget
+- `_meta` contains OpenAI directives only (`openai/outputTemplate`, etc.)
