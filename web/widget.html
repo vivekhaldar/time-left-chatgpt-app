@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      padding: 20px;
+      background: #ffffff;
+      color: #1a1a1a;
+      line-height: 1.5;
+    }
+
+    body.dark {
+      background: #0d0d0d;
+      color: #f5f5f5;
+    }
+
+    .container {
+      max-width: 400px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .header h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+
+    .header .timestamp {
+      font-size: 0.75rem;
+      opacity: 0.5;
+    }
+
+    .progress-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .progress-item {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .progress-label {
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .progress-detail {
+      font-size: 0.75rem;
+      opacity: 0.6;
+    }
+
+    .progress-stats {
+      font-size: 0.875rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .progress-stats .remaining {
+      opacity: 0.4;
+      font-weight: 400;
+    }
+
+    .progress-bar {
+      height: 8px;
+      background: #e5e5e5;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    body.dark .progress-bar {
+      background: #2a2a2a;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+    }
+
+    /* Gradient colors for each time period */
+    .progress-fill.day {
+      background: linear-gradient(90deg, #f59e0b, #f97316);
+    }
+
+    .progress-fill.week {
+      background: linear-gradient(90deg, #10b981, #14b8a6);
+    }
+
+    .progress-fill.month {
+      background: linear-gradient(90deg, #3b82f6, #6366f1);
+    }
+
+    .progress-fill.year {
+      background: linear-gradient(90deg, #8b5cf6, #a855f7);
+    }
+
+    /* Subtle shine animation */
+    .progress-fill::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.2) 50%,
+        transparent 100%
+      );
+      animation: shine 2s ease-in-out infinite;
+    }
+
+    @keyframes shine {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
+    .footer {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 0.7rem;
+      opacity: 0.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Time Remaining</h1>
+      <div class="timestamp" id="timestamp"></div>
+    </div>
+
+    <div class="progress-list" id="progress-list"></div>
+
+    <div class="footer">
+      Updated just now
+    </div>
+  </div>
+
+  <script>
+    function init() {
+      // Debug: log what ChatGPT passes to us
+      console.log("[Time Left Widget] window.openai:", window.openai);
+      console.log("[Time Left Widget] toolOutput:", window.openai?.toolOutput);
+      console.log("[Time Left Widget] toolResponseMetadata:", window.openai?.toolResponseMetadata);
+
+      // Apply theme
+      const theme = window.openai?.theme ?? "light";
+      document.body.classList.toggle("dark", theme === "dark");
+
+      // Get data from toolOutput (structuredContent from server)
+      const data = window.openai?.toolOutput ?? {};
+
+      // Update timestamp
+      if (data.timestamp) {
+        const date = new Date(data.timestamp);
+        document.getElementById("timestamp").textContent = date.toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
+
+      // Render progress bars
+      const periods = ['day', 'week', 'month', 'year'];
+      const container = document.getElementById("progress-list");
+      container.innerHTML = "";
+
+      periods.forEach((period, index) => {
+        const periodData = data[period];
+        if (!periodData) return;
+
+        const item = document.createElement("div");
+        item.className = "progress-item";
+
+        item.innerHTML = `
+          <div class="progress-header">
+            <div>
+              <span class="progress-label">${escapeHtml(periodData.label)}</span>
+              <span class="progress-detail">${escapeHtml(periodData.detail)}</span>
+            </div>
+            <div class="progress-stats">
+              ${periodData.elapsed}% <span class="remaining">elapsed</span>
+            </div>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill ${period}" style="width: 0%"></div>
+          </div>
+        `;
+
+        container.appendChild(item);
+
+        // Animate the progress bar after a short delay
+        setTimeout(() => {
+          const fill = item.querySelector(".progress-fill");
+          fill.style.width = `${periodData.elapsed}%`;
+        }, 100 + index * 150);
+      });
+    }
+
+    function escapeHtml(text) {
+      if (!text) return "";
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Initialize when DOM is ready
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+
+    // Listen for theme changes
+    window.addEventListener("openai:set-globals", init);
+  </script>
+</body>
+</html>
