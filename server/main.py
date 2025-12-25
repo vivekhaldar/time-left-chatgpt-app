@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -18,6 +19,10 @@ ROOT_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = ROOT_DIR.parent / "web"
 TEMPLATE_URI = "ui://widget/main.html"
 MIME_TYPE = "text/html+skybridge"
+
+# Production deployment configuration
+WIDGET_DOMAIN = os.environ.get("WIDGET_DOMAIN", "https://web-sandbox.oaiusercontent.com")
+PORT = int(os.environ.get("PORT", 8000))
 
 
 @lru_cache(maxsize=None)
@@ -90,10 +95,15 @@ def calculate_time_remaining() -> Dict[str, Any]:
 
 
 def tool_meta() -> Dict[str, Any]:
-    """Return standard tool metadata."""
+    """Return standard tool metadata with CSP for production deployment."""
     return {
         "openai/outputTemplate": TEMPLATE_URI,
         "openai/widgetAccessible": True,
+        "openai/widgetCSP": {
+            "connect_domains": [],      # Empty - widget doesn't make API calls
+            "resource_domains": [],     # Empty - all assets are inline
+        },
+        "openai/widgetDomain": WIDGET_DOMAIN,
     }
 
 
@@ -193,10 +203,7 @@ async def _handle_call_tool(req: types.CallToolRequest) -> types.ServerResult:
                     )
                 ],
                 structuredContent=time_data,  # All widget data here
-                _meta={
-                    "openai/outputTemplate": TEMPLATE_URI,
-                    "openai/widgetAccessible": True,
-                },
+                _meta=tool_meta(),
             )
         )
 
@@ -232,4 +239,4 @@ except ImportError:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
