@@ -123,3 +123,53 @@ User Prompt → ChatGPT Model → MCP Tool Call → This Server → Response + W
 Key data flow:
 - `structuredContent` in server response → `window.openai.toolOutput` in widget
 - `_meta` contains OpenAI directives only (`openai/outputTemplate`, etc.)
+
+## Production Deployment
+
+For production deployment to Google Cloud Run (or similar), the server includes:
+
+### CSP Configuration
+
+The tool metadata includes Content Security Policy settings required for ChatGPT app submission:
+
+```python
+"openai/widgetCSP": {
+    "connect_domains": [],      # Empty - widget doesn't make external API calls
+    "resource_domains": [],     # Empty - all assets are inline
+},
+"openai/widgetDomain": WIDGET_DOMAIN
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `8000` | Server port (Cloud Run sets this automatically) |
+| `WIDGET_DOMAIN` | `https://web-sandbox.oaiusercontent.com` | Widget execution domain |
+
+### Deploying to Google Cloud Run
+
+```bash
+# Build and deploy
+gcloud run deploy time-left \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars WIDGET_DOMAIN=https://your-domain.com
+
+# Map custom domain
+gcloud run domain-mappings create \
+  --service time-left \
+  --domain your-domain.com \
+  --region us-central1
+```
+
+### App Submission Checklist
+
+- [x] CSP configured (`openai/widgetCSP`)
+- [x] Widget domain configured (`openai/widgetDomain`)
+- [ ] Organization verified on [OpenAI Platform](https://platform.openai.com/settings/organization/general)
+- [ ] Production URL deployed and accessible
+- [ ] Privacy policy URL prepared
+
+Submit at: https://platform.openai.com/apps-manage
